@@ -12,7 +12,8 @@ Install
 ----
 Require pre-install Rust-nightly.
 ```text
-pip install git+https://github.com/namuyan/bc4py_extension
+pip3 install --user setuptools-rust
+pip3 install --user git+https://github.com/namuyan/bc4py_extension
 ```
 
 Licence
