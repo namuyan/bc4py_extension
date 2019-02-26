@@ -1,0 +1,8 @@
+include src/*.rs
+exclude target
+exclude .gitignore
+exclude Cargo.lock
+include Cargo.toml
+include *.md
+include *.txt
+include *.py
