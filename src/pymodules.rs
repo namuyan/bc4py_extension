@@ -1,5 +1,5 @@
 use super::bc4py_plotter::pochash::generator;
-use crate::workhash::{get_work_hash, get_scope_index, seek_file};
+use crate::workhash::{get_work_hash, get_scope_index, seek_file, seek_files};
 use blake2b_simd::blake2bp::blake2bp;
 use pyo3::prelude::{Py,PyResult,PyObject,Python,PyModule,ToPyObject,pyfunction,pymodule};
 use pyo3::types::{PyBytes,PyTuple};
@@ -51,6 +51,25 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize,
     };
 }
 
+#[pyfunction]
+fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes,
+              target: &PyBytes, time:u32, worker: usize) -> Py<PyTuple> {
+    let previous_hash = previous_hash.as_bytes();
+    let target = target.as_bytes();
+    match seek_files(dir, previous_hash, target, time, worker) {
+        Ok((nonce, workhash, address)) => PyTuple::new(_py, &[
+                PyObject::from(nonce.to_object(_py)),
+                PyObject::from(PyBytes::new(_py, workhash.as_slice())),
+                PyObject::from(address.to_object(_py))
+            ]),
+        Err(err) => PyTuple::new(_py, &[
+            PyObject::from(_py.None()),
+            PyObject::from(_py.None()),
+            PyObject::from(err.to_object(_py))
+        ])
+    }
+}
+
 /// This module is a python module implemented in Rust.
 #[pymodule]
 fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -59,5 +78,6 @@ fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(poc_hash))?;
     m.add_wrapped(wrap_pyfunction!(poc_work))?;
     m.add_wrapped(wrap_pyfunction!(single_seek))?;
+    m.add_wrapped(wrap_pyfunction!(multi_seek))?;
     Ok(())
 }

@@ -3,6 +3,7 @@ extern crate test;
 
 extern crate bc4py_plotter;
 extern crate bigint;
+extern crate regex;
 
 pub mod pymodules;
 pub mod workhash;

@@ -13,7 +13,8 @@ bc4py_plotter = {git = "http://github.com/namuyan/bc4py_plotter", branch = "mast
 #bc4py_plotter = {path = "../bc4py_plotter"}
 blake2b_simd = "0.4.1"
 etcommon-bigint = "0.2.10"
-#workerpool = "1.2.0"
+workerpool = "1.2.0"
+regex = "1"
 
 [dependencies.pyo3]
 version = "0.6.0-alpha.4"

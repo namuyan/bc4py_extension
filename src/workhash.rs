@@ -2,11 +2,15 @@ use bc4py_plotter::pochash::{HASH_LOOP_COUNT,HASH_LENGTH};
 use blake2b_simd::blake2bp::blake2bp;
 use blake2b_simd::Hash;
 use bigint::U256;
+use workerpool::Pool;
+use workerpool::thunk::{Thunk,ThunkWorker};
+use regex::Regex;
 use std::path::Path;
 use std::io::{Seek, SeekFrom, BufReader, Read};
-use std::fs::File;
+use std::fs::{File, read_dir};
 use std::mem::transmute;
 use std::time::Instant;
+use std::sync::mpsc::channel;
 
 const SEEK_TIMEOUT: u64 = 5;
 
@@ -80,4 +84,49 @@ pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], tar
         }
     }
     Err(String::from("full seeked but not found enough work"))
+}
+
+pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8],
+                  time:u32, worker: usize) -> Result<(u32, Vec<u8>, String), String> {
+    let pool =
+        Pool::<ThunkWorker<(Result<(u32, Vec<u8>), String>, String)>>::new(worker);
+    let (tx, rx) = channel();
+    let re = Regex::new("^optimized\\.([A-Z0-9]{40})\\-([0-9]+)\\-([0-9]+)\\.dat$").unwrap();
+
+    let mut wait_count = 0;
+    let paths = read_dir(dir).unwrap();
+    for path in paths {
+        let path = path.unwrap().path();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        match re.captures(name) {
+            Some(c) => {
+                if c.len() != 4 { continue }
+                let address = c.get(1).unwrap().as_str().to_owned();
+                let start: usize = c.get(2).unwrap().as_str().parse().unwrap();
+                let end: usize = c.get(3).unwrap().as_str().parse().unwrap();
+                let previous_hash = previous_hash.to_vec();
+                let target = target.to_vec();
+                let path = path.as_path().to_str().unwrap().to_owned();
+                pool.execute_to(tx.clone(), Thunk::of(move || {
+                    let previous_hash = previous_hash.as_slice();
+                    let target = target.as_slice();
+                    (seek_file(&path, start, end, previous_hash, target, time), address)
+                }));
+                wait_count += 1;
+            },
+            _ => ()
+        }
+    }
+
+    for (result, address) in rx {
+        wait_count -= 1;
+        match result {
+            Ok((nonce, workhash)) => return Ok((nonce, workhash, address)),
+            _ => ()
+        };
+        if wait_count <= 0 {
+            return Err("full seeked but not found enough work".to_owned());
+        };
+    }
+    Err("out of loop, it's exception".to_owned())
 }
