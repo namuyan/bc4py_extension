@@ -4,6 +4,21 @@ use blake2b_simd::blake2bp::blake2bp;
 use pyo3::prelude::{Py,PyResult,PyObject,Python,PyModule,ToPyObject,pyfunction,pymodule};
 use pyo3::types::{PyBytes,PyTuple};
 use pyo3::wrap_pyfunction;
+use std::mem::transmute;
+
+#[inline]
+fn u32_to_bytes(i: u32) -> [u8;4] {
+    unsafe { transmute(i.to_le()) }
+}
+
+#[inline]
+fn bytes_to_u32(bytes: &[u8]) -> u32 {
+    let mut tmp= [0u8;4];
+    for (a, b) in tmp.iter_mut().zip(bytes.iter()) {
+        *a = *b
+    }
+    unsafe {transmute::<[u8; 4], u32>(tmp)}
+}
 
 #[pyfunction]
 fn blake2bp_hash(_py: Python<'_>, hash: &PyBytes) -> Py<PyBytes> {
@@ -19,8 +34,9 @@ fn scope_index(previous_hash: &PyBytes) -> u32{
 }
 
 #[pyfunction]
-fn poc_hash(_py: Python<'_>, address: &str, nonce: u32) -> Py<PyBytes> {
-    let b = generator(address, nonce);
+fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> Py<PyBytes> {
+    let nonce = nonce.as_bytes();
+    let b = generator(address, bytes_to_u32(nonce));
     PyBytes::new(_py, &b[..])
 }
 
@@ -40,10 +56,12 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize,
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
     return match seek_file(path, start, end, previous_hash, target, time) {
-        Ok((nonce, workhash)) => PyTuple::new(_py, &[
-            PyObject::from(nonce.to_object(_py)),
-            PyObject::from(PyBytes::new(_py, &workhash))
-        ]),
+        Ok((nonce, workhash)) => {
+            PyTuple::new(_py, &[
+                PyObject::from(u32_to_bytes(nonce).to_object(_py)),
+                PyObject::from(PyBytes::new(_py, &workhash))
+            ])
+        },
         Err(err) => PyTuple::new(_py, &[
             PyObject::from(_py.None()),
             PyObject::from(err.to_object(_py))
@@ -58,7 +76,7 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes,
     let target = target.as_bytes();
     match seek_files(dir, previous_hash, target, time, worker) {
         Ok((nonce, workhash, address)) => PyTuple::new(_py, &[
-                PyObject::from(nonce.to_object(_py)),
+                PyObject::from(u32_to_bytes(nonce).to_object(_py)),
                 PyObject::from(PyBytes::new(_py, workhash.as_slice())),
                 PyObject::from(address.to_object(_py))
             ]),
