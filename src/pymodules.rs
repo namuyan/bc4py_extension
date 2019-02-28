@@ -58,7 +58,7 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize,
     return match seek_file(path, start, end, previous_hash, target, time) {
         Ok((nonce, workhash)) => {
             PyTuple::new(_py, &[
-                PyObject::from(u32_to_bytes(nonce).to_object(_py)),
+                PyObject::from(PyBytes::new(_py,&u32_to_bytes(nonce))),
                 PyObject::from(PyBytes::new(_py, &workhash))
             ])
         },
@@ -76,7 +76,7 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes,
     let target = target.as_bytes();
     match seek_files(dir, previous_hash, target, time, worker) {
         Ok((nonce, workhash, address)) => PyTuple::new(_py, &[
-                PyObject::from(u32_to_bytes(nonce).to_object(_py)),
+                PyObject::from(PyBytes::new(_py,&u32_to_bytes(nonce))),
                 PyObject::from(PyBytes::new(_py, workhash.as_slice())),
                 PyObject::from(address.to_object(_py))
             ]),
