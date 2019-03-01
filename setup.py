@@ -16,6 +16,9 @@ def get_py_version_cfgs():
     return out_cfg
 
 
+with open('README.md', mode="r") as f:
+    readme = f.read()
+
 install_requires = list()
 with open("requirements.txt", mode="r") as fp:
     for line in fp.read().split("\n"):
@@ -36,10 +39,13 @@ with open("Cargo.toml", mode="r") as fp:
 
 setup(
     name="bc4py_extension",
+    url='https://github.com/namuyan/bc4py_extension',
+    description='python extension for bc4py',
+    long_description=readme,
     version=main_version,
     classifiers=[
         "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Rust",
     ],
     rust_extensions=[
@@ -51,5 +57,6 @@ setup(
     ],
     install_requires=install_requires,
     include_package_data=True,
+    license="MIT Licence",
     zip_safe=False
 )

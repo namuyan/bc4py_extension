@@ -1,4 +1,4 @@
-include src/*.rs
+recursive-include src *
 exclude target
 exclude .gitignore
 exclude Cargo.lock
