@@ -5,6 +5,7 @@ use pyo3::prelude::{Py,PyResult,PyObject,Python,PyModule,ToPyObject,pyfunction,p
 use pyo3::types::{PyBytes,PyTuple};
 use pyo3::wrap_pyfunction;
 use std::mem::transmute;
+use std::time::Instant;
 
 #[inline]
 fn u32_to_bytes(i: u32) -> [u8;4] {
@@ -55,7 +56,8 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize,
               previous_hash: &PyBytes, target: &PyBytes, time:u32) -> Py<PyTuple> {
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
-    return match seek_file(path, start, end, previous_hash, target, time) {
+    let now = Instant::now();
+    return match seek_file(path, start, end, previous_hash, target, time, now) {
         Ok((nonce, workhash)) => {
             PyTuple::new(_py, &[
                 PyObject::from(PyBytes::new(_py,&u32_to_bytes(nonce))),

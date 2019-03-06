@@ -50,10 +50,9 @@ pub fn get_scope_index(previous_hash: &[u8]) -> u32 {
     index.into()
 }
 
-pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], target: &[u8], time: u32)
+pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], target: &[u8], time: u32, now: Instant)
     -> Result<(u32, Vec<u8>), String> {
     // return (nonce, workHash)
-    let now = Instant::now();
     let path = Path::new(path);
     if !path.exists() {
         return Err(String::from(format!("not found file \"{}\"", path.display())));
@@ -88,6 +87,7 @@ pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], tar
 
 pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8],
                   time:u32, worker: usize) -> Result<(u32, Vec<u8>, String), String> {
+    let now = Instant::now();
     let pool =
         Pool::<ThunkWorker<(Result<(u32, Vec<u8>), String>, String)>>::new(worker);
     let (tx, rx) = channel();
@@ -107,10 +107,11 @@ pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8],
                 let previous_hash = previous_hash.to_vec();
                 let target = target.to_vec();
                 let path = path.as_path().to_str().unwrap().to_owned();
+                let now = now.clone();
                 pool.execute_to(tx.clone(), Thunk::of(move || {
                     let previous_hash = previous_hash.as_slice();
                     let target = target.as_slice();
-                    (seek_file(&path, start, end, previous_hash, target, time), address)
+                    (seek_file(&path, start, end, previous_hash, target, time, now), address)
                 }));
                 wait_count += 1;
             },
@@ -125,7 +126,7 @@ pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8],
             _ => ()
         };
         if wait_count <= 0 {
-            return Err("full seeked but not found enough work".to_owned());
+            return Err(format!("full seeked but not found enough work {}mSec", now.elapsed().as_millis()));
         };
     }
     Err("out of loop, it's exception".to_owned())
