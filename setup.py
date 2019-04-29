@@ -42,6 +42,7 @@ setup(
     url='https://github.com/namuyan/bc4py_extension',
     description='python extension for bc4py',
     long_description=readme,
+    long_description_content_type='text/markdown',
     version=main_version,
     classifiers=[
         "License :: OSI Approved :: MIT License",

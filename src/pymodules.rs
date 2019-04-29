@@ -1,7 +1,9 @@
-use super::bc4py_plotter::pochash::generator;
+use super::bc4py_plotter::pochash::{generator,HASH_LOOP_COUNT,HASH_LENGTH};
+use super::bc4py_plotter::utils::addr2ver_identifier;
 use crate::workhash::{get_work_hash, get_scope_index, seek_file, seek_files};
-use blake2b_simd::blake2bp::blake2bp;
+use blake2b_simd::blake2b;
 use pyo3::prelude::{Py,PyResult,PyObject,Python,PyModule,ToPyObject,pyfunction,pymodule};
+use pyo3::exceptions::ValueError;
 use pyo3::types::{PyBytes,PyTuple};
 use pyo3::wrap_pyfunction;
 use std::mem::transmute;
@@ -22,8 +24,8 @@ fn bytes_to_u32(bytes: &[u8]) -> u32 {
 }
 
 #[pyfunction]
-fn blake2bp_hash(_py: Python<'_>, hash: &PyBytes) -> Py<PyBytes> {
-    let hash = blake2bp(hash.as_bytes());
+fn blake2b_hash(_py: Python<'_>, hash: &PyBytes) -> Py<PyBytes> {
+    let hash = blake2b(hash.as_bytes());
     let hash = hash.as_bytes();
     PyBytes::new(_py, &hash[0..32])
 }
@@ -35,10 +37,15 @@ fn scope_index(previous_hash: &PyBytes) -> u32{
 }
 
 #[pyfunction]
-fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> Py<PyBytes> {
+fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> PyResult<PyObject> {
     let nonce = nonce.as_bytes();
-    let b = generator(address, bytes_to_u32(nonce));
-    PyBytes::new(_py, &b[..])
+    let ver_identifier = match addr2ver_identifier(address) {
+        Ok(ver_identifier) => ver_identifier,
+        Err(err) => return Err(ValueError::py_err(err))
+    };
+    let mut output =  Box::new([0u8;HASH_LOOP_COUNT*HASH_LENGTH]);
+    generator(&ver_identifier, bytes_to_u32(nonce), &mut output);
+    Ok(PyBytes::new(_py, &output.to_vec()).to_object(_py))
 }
 
 #[pyfunction]
@@ -93,7 +100,7 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes,
 /// This module is a python module implemented in Rust.
 #[pymodule]
 fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(blake2bp_hash))?;
+    m.add_wrapped(wrap_pyfunction!(blake2b_hash))?;
     m.add_wrapped(wrap_pyfunction!(scope_index))?;
     m.add_wrapped(wrap_pyfunction!(poc_hash))?;
     m.add_wrapped(wrap_pyfunction!(poc_work))?;

@@ -1,5 +1,5 @@
 use bc4py_plotter::pochash::{HASH_LOOP_COUNT,HASH_LENGTH};
-use blake2b_simd::blake2bp::blake2bp;
+use blake2b_simd::blake2b;
 use blake2b_simd::Hash;
 use bigint::U256;
 use workerpool::Pool;
@@ -30,13 +30,13 @@ fn work_check(work: &[u8], target: &[u8]) -> bool {
 
 #[inline]
 pub fn get_work_hash(time: u32, scope_hash: &[u8], previous_hash: &[u8]) -> Hash {
-    // work = blake2bp([blockTime 4bytes]-[scopeHash 32bytes]-[previousHash 32bytes])
+    // work = blake2b([blockTime 4bytes]-[scopeHash 32bytes]-[previousHash 32bytes])
     let mut v = Vec::with_capacity(4 + 32 + 4);
     let bytes: [u8; 4] = unsafe { transmute(time.to_le()) };
     v.extend_from_slice(&bytes);
     v.extend_from_slice(scope_hash);
     v.extend_from_slice(previous_hash);
-    blake2bp(&v)
+    blake2b(&v)
 }
 
 #[inline]
@@ -91,7 +91,7 @@ pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8],
     let pool =
         Pool::<ThunkWorker<(Result<(u32, Vec<u8>), String>, String)>>::new(worker);
     let (tx, rx) = channel();
-    let re = Regex::new("^optimized\\.([A-Z0-9]{40})\\-([0-9]+)\\-([0-9]+)\\.dat$").unwrap();
+    let re = Regex::new("^optimized\\.([a-z0-9]+)\\-([0-9]+)\\-([0-9]+)\\.dat$").unwrap();
 
     let mut wait_count = 0;
     let paths = read_dir(dir).unwrap();
