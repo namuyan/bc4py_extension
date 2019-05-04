@@ -92,7 +92,6 @@ fn bech2address(_py: Python<'_>, hrp: &str, ver: u8, identifier: &PyBytes) -> Py
         Ok(bech) => bech,
         Err(err) => return Err(ValueError::py_err(err.to_string()))
     };
-    println!("no bech={}", bech);
     Ok(bech.to_string().to_object(_py))
 }
 
