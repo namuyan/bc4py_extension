@@ -1,27 +1,14 @@
 use super::bc4py_plotter::pochash::{generator,HASH_LOOP_COUNT,HASH_LENGTH};
-use super::bc4py_plotter::utils::addr2ver_identifier;
+use super::bc4py_plotter::utils::*;
 use crate::workhash::{get_work_hash, get_scope_index, seek_file, seek_files};
+use crate::utils::{bytes_to_u32,u32_to_bytes};
 use blake2b_simd::blake2b;
 use pyo3::prelude::{Py,PyResult,PyObject,Python,PyModule,ToPyObject,pyfunction,pymodule};
 use pyo3::exceptions::ValueError;
 use pyo3::types::{PyBytes,PyTuple};
 use pyo3::wrap_pyfunction;
-use std::mem::transmute;
 use std::time::Instant;
 
-#[inline]
-fn u32_to_bytes(i: u32) -> [u8;4] {
-    unsafe { transmute(i.to_le()) }
-}
-
-#[inline]
-fn bytes_to_u32(bytes: &[u8]) -> u32 {
-    let mut tmp= [0u8;4];
-    for (a, b) in tmp.iter_mut().zip(bytes.iter()) {
-        *a = *b
-    }
-    unsafe {transmute::<[u8; 4], u32>(tmp)}
-}
 
 #[pyfunction]
 fn blake2b_hash(_py: Python<'_>, hash: &PyBytes) -> Py<PyBytes> {
@@ -97,6 +84,33 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes,
     }
 }
 
+#[pyfunction]
+fn bech2address(_py: Python<'_>, hrp: &str, ver: u8, identifier: &PyBytes) -> PyResult<PyObject> {
+    // (hrp, ver, identifier) -> bech address
+    let identifier = identifier.as_bytes();
+    let bech = match params2bech(hrp, ver, identifier) {
+        Ok(bech) => bech,
+        Err(err) => return Err(ValueError::py_err(err.to_string()))
+    };
+    println!("no bech={}", bech);
+    Ok(bech.to_string().to_object(_py))
+}
+
+#[pyfunction]
+fn address2bech(_py: Python<'_>, addr: &str) -> PyResult<PyObject> {
+    // bech address -> (hrp, ver, identifier)
+    let (hrp, ver, identifier) = match addr2params(addr) {
+        Ok((hrp, ver, identifier)) => (hrp, ver, identifier),
+        Err(err) => return Err(ValueError::py_err(err.to_string()))
+    };
+    Ok(PyTuple::new(_py,&[
+        hrp.to_object(_py),
+        ver.to_object(_py),
+        PyBytes::new(_py, &identifier).to_object(_py)
+    ]).to_object(_py))
+}
+
+
 /// This module is a python module implemented in Rust.
 #[pymodule]
 fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -106,5 +120,7 @@ fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(poc_work))?;
     m.add_wrapped(wrap_pyfunction!(single_seek))?;
     m.add_wrapped(wrap_pyfunction!(multi_seek))?;
+    m.add_wrapped(wrap_pyfunction!(bech2address))?;
+    m.add_wrapped(wrap_pyfunction!(address2bech))?;
     Ok(())
 }

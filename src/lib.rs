@@ -7,6 +7,7 @@ extern crate regex;
 
 pub mod pymodules;
 pub mod workhash;
+pub mod utils;
 
 
 #[cfg(test)]
