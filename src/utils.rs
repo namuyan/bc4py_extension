@@ -1,4 +1,5 @@
 use std::mem::transmute;
+use sha2::{Sha256, Digest};
 
 
 #[inline]
@@ -13,4 +14,11 @@ pub fn bytes_to_u32(bytes: &[u8]) -> u32 {
         *a = *b
     }
     unsafe {transmute::<[u8; 4], u32>(tmp)}
+}
+
+#[inline]
+pub fn sha256double(b: &[u8]) -> Vec<u8> {
+    let hash = Sha256::digest(b);
+    let hash = Sha256::digest(hash.as_slice());
+    hash.to_vec()
 }
