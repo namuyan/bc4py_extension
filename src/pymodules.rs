@@ -15,9 +15,9 @@ use std::time::Instant;
 ///
 /// generate sha256 double hash
 #[pyfunction]
-fn sha256d_hash(_py: Python<'_>, hash: &PyBytes) -> Py<PyBytes> {
+fn sha256d_hash(_py: Python<'_>, hash: &PyBytes) -> PyObject {
     let hash = sha256double(hash.as_bytes());
-    PyBytes::new(_py, hash.as_slice())
+    PyBytes::new(_py, hash.as_slice()).to_object(_py)
 }
 
 /// merkleroot_hash(hashs:list) -> bytes
@@ -58,10 +58,10 @@ fn merkleroot_hash(_py: Python<'_>, hashs: &PyList) -> PyResult<PyObject> {
 ///
 /// generate blake2b hash
 #[pyfunction]
-fn blake2b_hash(_py: Python<'_>, hash: &PyBytes) -> Py<PyBytes> {
+fn blake2b_hash(_py: Python<'_>, hash: &PyBytes) -> PyObject {
     let hash = blake2b(hash.as_bytes());
     let hash = hash.as_bytes();
-    PyBytes::new(_py, &hash[0..32])
+    PyBytes::new(_py, &hash[0..32]).to_object(_py)
 }
 
 /// scope_index(previous_hash:bytes) -> int
@@ -97,13 +97,13 @@ fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> PyResult<PyObjec
 ///
 /// generate poc work hash
 #[pyfunction]
-fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &PyBytes) -> Py<PyBytes> {
+fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &PyBytes) -> PyObject {
     let scope_hash = scope_hash.as_bytes();
     let previous_hash = previous_hash.as_bytes();
     let work = get_work_hash(time, scope_hash, previous_hash);
     let work = work.as_bytes();
     let work = &work[..32];
-    PyBytes::new(_py, work)
+    PyBytes::new(_py, work).to_object(_py)
 }
 
 /// single_seek(path:str, start:int, end:int, previous_hash:bytes, target:bytes, time:int) -> tuple
@@ -112,22 +112,22 @@ fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &Py
 /// seek one optimized poc file
 #[pyfunction]
 fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize, previous_hash: &PyBytes, target: &PyBytes, time:u32)
-    -> Py<PyTuple> {
+    -> PyObject {
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
     let now = Instant::now();
-    return match seek_file(path, start, end, previous_hash, target, time, now) {
+    match seek_file(path, start, end, previous_hash, target, time, now) {
         Ok((nonce, workhash)) => {
             PyTuple::new(_py, &[
                 PyBytes::new(_py,&u32_to_bytes(nonce)).to_object(_py),
                 PyBytes::new(_py, &workhash).to_object(_py)
-            ])
+            ]).to_object(_py)
         },
         Err(err) => PyTuple::new(_py, &[
             _py.None().to_object(_py),
             err.to_object(_py)
-        ])
-    };
+        ]).to_object(_py)
+    }
 }
 
 /// multi_seek(dir:str, previous_hash:bytes, target:bytes, time:int, worker:int) -> tuple
@@ -136,7 +136,7 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize, previous_h
 /// seek optimized files from directory
 #[pyfunction]
 fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes, target: &PyBytes, time:u32, worker: usize)
-    -> Py<PyTuple> {
+    -> PyObject {
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
     match seek_files(dir, previous_hash, target, time, worker) {
@@ -144,12 +144,12 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes, target: &PyBy
                 PyBytes::new(_py,&u32_to_bytes(nonce)).to_object(_py),
                 PyBytes::new(_py, workhash.as_slice()).to_object(_py),
                 address.to_object(_py)
-            ]),
+            ]).to_object(_py),
         Err(err) => PyTuple::new(_py, &[
             _py.None().to_object(_py),
             _py.None().to_object(_py),
             err.to_object(_py).to_object(_py)
-        ])
+        ]).to_object(_py)
     }
 }
 

@@ -23,5 +23,5 @@ branch = "master"
 version = "0.1.4"
 
 [dependencies.pyo3]
-version = "0.6.0-alpha.4"
+version = "0.7.0"
 features = ["extension-module"]
