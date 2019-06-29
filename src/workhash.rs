@@ -85,8 +85,8 @@ pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], tar
     Err(String::from("full seeked but not found enough work"))
 }
 
-pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8],
-                  time:u32, worker: usize) -> Result<(u32, Vec<u8>, String), String> {
+pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, worker: usize)
+    -> Result<(u32, Vec<u8>, String), String> {
     let now = Instant::now();
     let pool =
         Pool::<ThunkWorker<(Result<(u32, Vec<u8>), String>, String)>>::new(worker);

@@ -70,7 +70,7 @@ fn blake2b_hash(_py: Python<'_>, hash: &PyBytes) -> PyObject {
 /// get scope index from previous hash
 /// index = (previous_hash to little endian 32bytes int) % scope_length
 #[pyfunction]
-fn scope_index(previous_hash: &PyBytes) -> u32{
+fn scope_index(previous_hash: &PyBytes) -> u32 {
     let previous_hash = previous_hash.as_bytes();
     get_scope_index(previous_hash)
 }
@@ -97,7 +97,8 @@ fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> PyResult<PyObjec
 ///
 /// generate poc work hash
 #[pyfunction]
-fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &PyBytes) -> PyObject {
+fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &PyBytes)
+    -> PyObject {
     let scope_hash = scope_hash.as_bytes();
     let previous_hash = previous_hash.as_bytes();
     let work = get_work_hash(time, scope_hash, previous_hash);
@@ -158,7 +159,8 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes, target: &PyBy
 ///
 /// get bech32 address from params(hrp, version, identifier)
 #[pyfunction]
-fn bech2address(_py: Python<'_>, hrp: &str, ver: u8, identifier: &PyBytes) -> PyResult<PyObject> {
+fn bech2address(_py: Python<'_>, hrp: &str, ver: u8, identifier: &PyBytes)
+    -> PyResult<PyObject> {
     // (hrp, ver, identifier) -> bech address
     let identifier = identifier.as_bytes();
     let bech = match params2bech(hrp, ver, identifier) {
