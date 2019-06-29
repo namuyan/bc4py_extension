@@ -87,9 +87,12 @@ fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> PyResult<PyObjec
         Ok(ver_identifier) => ver_identifier,
         Err(err) => return Err(ValueError::py_err(err))
     };
-    let mut output =  Box::new([0u8;HASH_LOOP_COUNT*HASH_LENGTH]);
-    generator(&ver_identifier, bytes_to_u32(nonce), &mut output);
-    Ok(PyBytes::new(_py, &output.to_vec()).to_object(_py))
+    let hash = _py.allow_threads(move || {
+        let mut output =  Box::new([0u8;HASH_LOOP_COUNT*HASH_LENGTH]);
+        generator(&ver_identifier, bytes_to_u32(nonce), &mut output);
+        output.to_vec()
+    });
+    Ok(PyBytes::new(_py, hash.as_slice()).to_object(_py))
 }
 
 /// poc_work(time:int, scope_hash:bytes, previous_hash:bytes) -> bytes
@@ -101,7 +104,9 @@ fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &Py
     -> PyObject {
     let scope_hash = scope_hash.as_bytes();
     let previous_hash = previous_hash.as_bytes();
-    let work = get_work_hash(time, scope_hash, previous_hash);
+    let work = _py.allow_threads(move || {
+        get_work_hash(time, scope_hash, previous_hash)
+    });
     let work = work.as_bytes();
     let work = &work[..32];
     PyBytes::new(_py, work).to_object(_py)
@@ -117,7 +122,10 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize, previous_h
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
     let now = Instant::now();
-    match seek_file(path, start, end, previous_hash, target, time, now) {
+    let result = _py.allow_threads(move || {
+        seek_file(path, start, end, previous_hash, target, time, now)
+    });
+    match result {
         Ok((nonce, workhash)) => {
             PyTuple::new(_py, &[
                 PyBytes::new(_py,&u32_to_bytes(nonce)).to_object(_py),
@@ -140,7 +148,10 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes, target: &PyBy
     -> PyObject {
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
-    match seek_files(dir, previous_hash, target, time, worker) {
+    let result = _py.allow_threads(move || {
+        seek_files(dir, previous_hash, target, time, worker)
+    });
+    match result {
         Ok((nonce, workhash, address)) => PyTuple::new(_py, &[
                 PyBytes::new(_py,&u32_to_bytes(nonce)).to_object(_py),
                 PyBytes::new(_py, workhash.as_slice()).to_object(_py),
