@@ -20,6 +20,7 @@ fn sha256d_hash(_py: Python<'_>, hash: &PyBytes) -> PyObject {
     PyBytes::new(_py, hash.as_slice()).to_object(_py)
 }
 
+
 /// merkleroot_hash(hashs:list) -> bytes
 /// --
 ///
@@ -64,6 +65,7 @@ fn blake2b_hash(_py: Python<'_>, hash: &PyBytes) -> PyObject {
     PyBytes::new(_py, &hash[0..32]).to_object(_py)
 }
 
+
 /// scope_index(previous_hash:bytes) -> int
 /// --
 ///
@@ -74,6 +76,7 @@ fn scope_index(previous_hash: &PyBytes) -> u32 {
     let previous_hash = previous_hash.as_bytes();
     get_scope_index(previous_hash)
 }
+
 
 /// poc_hash(address:str, nonce:bytes) -> bytes
 /// --
@@ -95,6 +98,7 @@ fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> PyResult<PyObjec
     Ok(PyBytes::new(_py, hash.as_slice()).to_object(_py))
 }
 
+
 /// poc_work(time:int, scope_hash:bytes, previous_hash:bytes) -> bytes
 /// --
 ///
@@ -111,6 +115,7 @@ fn poc_work(_py: Python<'_>, time: u32, scope_hash: &PyBytes, previous_hash: &Py
     let work = &work[..32];
     PyBytes::new(_py, work).to_object(_py)
 }
+
 
 /// single_seek(path:str, start:int, end:int, previous_hash:bytes, target:bytes, time:int) -> tuple
 /// --
@@ -139,6 +144,7 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize, previous_h
     }
 }
 
+
 /// multi_seek(dir:str, previous_hash:bytes, target:bytes, time:int, worker:int) -> tuple
 /// --
 ///
@@ -165,6 +171,7 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes, target: &PyBy
     }
 }
 
+
 /// bech2address(hrp:str, ver:int, identifier:bytes) -> str
 /// --
 ///
@@ -180,6 +187,7 @@ fn bech2address(_py: Python<'_>, hrp: &str, ver: u8, identifier: &PyBytes)
     };
     Ok(bech.to_string().to_object(_py))
 }
+
 
 /// address2bech(addr:str) -> tuple
 /// --
