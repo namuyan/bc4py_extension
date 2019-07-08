@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use pyo3::exceptions::ValueError;
 use pyo3::types::{PyBytes, PyType};
 use pyo3::PyObjectProtocol;
+use pyo3::class::basic::CompareOp;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::convert::TryFrom;
@@ -31,6 +32,15 @@ impl PyObjectProtocol for PyAddress {
         let h = (hasher.finish() % max) as i64 - (max / 2) as i64;
         isize::try_from(h).map_err(
             |_| ValueError::py_err("failed __hash__ generate"))
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        // only check version + identifier
+        match op {
+            CompareOp::Eq => Ok(self.bech.data() == other.bech.data()),  // `__eq__`
+            CompareOp::Ne => Ok(self.bech.data() != other.bech.data()),  // `__ne__`
+            _ => Err(ValueError::py_err("not implemented"))
+        }
     }
 }
 
