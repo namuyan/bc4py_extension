@@ -1,5 +1,6 @@
 use super::bc4py_plotter::pochash::{generator,HASH_LOOP_COUNT,HASH_LENGTH};
 use super::bc4py_plotter::utils::*;
+use crate::pyaddress::PyAddress;
 use crate::workhash::{get_work_hash, get_scope_index, seek_file, seek_files};
 use crate::utils::{bytes_to_u32, u32_to_bytes, sha256double};
 use blake2b_simd::blake2b;
@@ -221,5 +222,6 @@ fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(multi_seek))?;
     m.add_wrapped(wrap_pyfunction!(bech2address))?;
     m.add_wrapped(wrap_pyfunction!(address2bech))?;
+    m.add_class::<PyAddress>()?;
     Ok(())
 }

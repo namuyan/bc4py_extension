@@ -6,6 +6,7 @@ extern crate bigint;
 extern crate regex;
 extern crate sha2;
 
+pub mod pyaddress;
 pub mod pymodules;
 pub mod workhash;
 pub mod utils;
