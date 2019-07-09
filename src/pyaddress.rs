@@ -98,7 +98,7 @@ impl PyAddress {
     }
 
     #[getter]
-    fn address(&self) -> String {
+    fn string(&self) -> String {
         self.bech.to_string()
     }
 
