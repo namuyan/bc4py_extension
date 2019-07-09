@@ -1,6 +1,6 @@
 [package]
 name = "bc4py_extention"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["namuyan <thhjuuATyahoo.co.jp>"]
 edition = "2018"
 
