@@ -46,7 +46,7 @@ impl PyObjectProtocol for PyAddress {
 
 #[pymethods]
 impl PyAddress {
-    /// from_string(address: str) -> Address
+    /// PyAddress.from_string(address: str)
     /// --
     ///
     /// generate Address obj from string
@@ -57,7 +57,7 @@ impl PyAddress {
         Ok(PyAddress{bech})
     }
 
-    /// from_binary(hrp: str, data: bytes) -> Address
+    /// PyAddress.from_binary(hrp: str, data: bytes)
     /// --
     ///
     /// generate Address obj from 3 param
@@ -72,7 +72,7 @@ impl PyAddress {
         Ok(PyAddress{bech})
     }
 
-    /// from_param(hrp: str, ver: int, identifier: bytes) -> Address
+    /// PyAddress.from_param(hrp: str, ver: int, identifier: bytes)
     /// --
     ///
     /// generate Address obj from 3 param

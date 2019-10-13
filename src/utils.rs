@@ -22,3 +22,17 @@ pub fn sha256double(b: &[u8]) -> Vec<u8> {
     let hash = Sha256::digest(hash.as_slice());
     hash.to_vec()
 }
+
+#[inline]
+pub fn work_check(work: &[u8], target: &[u8]) -> bool {
+    // "hash < target" => true
+    debug_assert_eq!(work.len(), target.len());
+    for (work, target) in work.iter().rev().zip(target.iter().rev()) {
+        if work > target {
+            return false;
+        } else if work < target {
+            return true;
+        }
+    }
+    false
+}

@@ -1,7 +1,7 @@
 use super::bc4py_plotter::pochash::{generator,HASH_LOOP_COUNT,HASH_LENGTH};
 use super::bc4py_plotter::utils::*;
 use crate::pyaddress::PyAddress;
-use crate::workhash::{get_work_hash, get_scope_index, seek_file, seek_files};
+use crate::workhash::*;
 use crate::utils::{bytes_to_u32, u32_to_bytes, sha256double};
 use blake2b_simd::blake2b;
 use pyo3::prelude::*;
@@ -156,7 +156,7 @@ fn multi_seek(_py: Python<'_>, dir: &str, previous_hash: &PyBytes, target: &PyBy
     let previous_hash = previous_hash.as_bytes();
     let target = target.as_bytes();
     let result = _py.allow_threads(move || {
-        seek_files(dir, previous_hash, target, time, worker)
+        seek_folder(dir, previous_hash, target, time, worker)
     });
     match result {
         Ok((nonce, workhash, address)) => PyTuple::new(_py, &[

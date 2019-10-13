@@ -1,3 +1,4 @@
+use crate::utils::work_check;
 use bc4py_plotter::pochash::{HASH_LOOP_COUNT,HASH_LENGTH};
 use blake2b_simd::blake2b;
 use blake2b_simd::Hash;
@@ -10,23 +11,10 @@ use std::io::{Seek, SeekFrom, BufReader, Read};
 use std::fs::{File, read_dir};
 use std::mem::transmute;
 use std::time::Instant;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Sender, Receiver};
 
 const SEEK_TIMEOUT: u64 = 5;
 
-#[inline]
-fn work_check(work: &[u8], target: &[u8]) -> bool {
-    // hash < target => true
-    debug_assert_eq!(work.len(), target.len());
-    for (work, target) in work.iter().rev().zip(target.iter().rev()) {
-        if work > target {
-            return false;
-        } else if work < target {
-            return true;
-        }
-    }
-    false
-}
 
 #[inline]
 pub fn get_work_hash(time: u32, scope_hash: &[u8], previous_hash: &[u8]) -> Hash {
@@ -39,7 +27,6 @@ pub fn get_work_hash(time: u32, scope_hash: &[u8], previous_hash: &[u8]) -> Hash
     blake2b(&v)
 }
 
-#[inline]
 pub fn get_scope_index(previous_hash: &[u8]) -> u32 {
     // index = (previous_hash to little endian 32bytes int) % scope_length
     let mut previous_hash = previous_hash.to_owned();
@@ -64,6 +51,8 @@ pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], tar
     let scope_index = get_scope_index(previous_hash) as usize;
     let start_pos = (scope_index * 32 * (end - start)) as u64;
     fs.seek(SeekFrom::Start(start_pos)).map_err(|err| return err.to_string())?;
+
+    // seek
     let mut scope_hash = [0u8;32];
     for nonce in start..end {
         match fs.read(&mut scope_hash){
@@ -85,12 +74,13 @@ pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], tar
     Err(String::from("full seeked but not found enough work"))
 }
 
-pub fn seek_files(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, worker: usize)
-    -> Result<(u32, Vec<u8>, String), String> {
+pub fn seek_folder(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, worker: usize)
+                   -> Result<(u32, Vec<u8>, String), String> {
     let now = Instant::now();
-    let pool =
-        Pool::<ThunkWorker<(Result<(u32, Vec<u8>), String>, String)>>::new(worker);
-    let (tx, rx) = channel();
+
+    type ChannelType = (Result<(u32, Vec<u8>), String>, String);
+    let pool: Pool<ThunkWorker<ChannelType>> = Pool::<ThunkWorker<ChannelType>>::new(worker);
+    let (tx, rx): (Sender<ChannelType>, Receiver<ChannelType>) = channel();
     let re = Regex::new("^optimized\\.([a-z0-9]+)\\-([0-9]+)\\-([0-9]+)\\.dat$").unwrap();
 
     let mut wait_count = 0;
