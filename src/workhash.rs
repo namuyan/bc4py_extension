@@ -147,7 +147,7 @@ pub fn seek_folder(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, wor
     let now = Instant::now();
 
     type ChannelType = Result<(u32, Vec<u8>, String), String>;
-    let pool: Pool<ThunkWorker<ChannelType>> = Pool::<ThunkWorker<ChannelType>>::new(worker);
+    let pool: Pool<ThunkWorker<ChannelType>> = Pool::<ThunkWorker<ChannelType>>::new(1);
     let (tx, rx): (Sender<ChannelType>, Receiver<ChannelType>) = channel();
     let re = Regex::new("^optimized\\.([a-z0-9]+)\\-([0-9]+)\\-([0-9]+)\\.dat$").unwrap();
 
@@ -169,8 +169,8 @@ pub fn seek_folder(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, wor
                 pool.execute_to(tx.clone(), Thunk::of(move || {
                     let previous_hash = previous_hash.as_slice();
                     let target = target.as_slice();
-                    let (nonce, workhash) = seek_file(
-                        &path, start, end, previous_hash, target, time, now)?;
+                    let (nonce, workhash) = seek_thread(
+                        &path, start, end, previous_hash, target, time, now, worker)?;
                     Ok((nonce, workhash, address))
                 }));
                 wait_count += 1;
