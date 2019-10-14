@@ -146,6 +146,32 @@ fn single_seek(_py: Python<'_>, path: &str, start: usize, end: usize, previous_h
 }
 
 
+/// threads_seek(path:str, start:int, end:int previous_hash:bytes, target:bytes, time:int, worker:int) -> tuple
+/// --
+///
+/// seek optimized file processed with multi-thread
+#[pyfunction]
+fn thread_seek(_py: Python<'_>, path: &str, start: usize, end: usize, previous_hash: &PyBytes, target: &PyBytes, time:u32, worker: usize)
+               -> PyObject {
+    let previous_hash = previous_hash.as_bytes();
+    let target = target.as_bytes();
+    let now = Instant::now();
+    let result = _py.allow_threads(move || {
+        seek_thread(path, start, end, previous_hash, target, time, now, worker)
+    });
+    match result {
+        Ok((nonce, workhash)) => PyTuple::new(_py, &[
+                PyBytes::new(_py,&u32_to_bytes(nonce)).to_object(_py),
+                PyBytes::new(_py, workhash.as_slice()).to_object(_py),
+            ]).to_object(_py),
+        Err(err) => PyTuple::new(_py, &[
+            _py.None().to_object(_py),
+            err.to_object(_py).to_object(_py)
+        ]).to_object(_py)
+    }
+}
+
+
 /// multi_seek(dir:str, previous_hash:bytes, target:bytes, time:int, worker:int) -> tuple
 /// --
 ///
@@ -219,6 +245,7 @@ fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(poc_hash))?;
     m.add_wrapped(wrap_pyfunction!(poc_work))?;
     m.add_wrapped(wrap_pyfunction!(single_seek))?;
+    m.add_wrapped(wrap_pyfunction!(thread_seek))?;
     m.add_wrapped(wrap_pyfunction!(multi_seek))?;
     m.add_wrapped(wrap_pyfunction!(bech2address))?;
     m.add_wrapped(wrap_pyfunction!(address2bech))?;
