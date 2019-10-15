@@ -87,6 +87,9 @@ fn scope_index(previous_hash: &PyBytes) -> u32 {
 #[pyfunction]
 fn poc_hash(_py: Python<'_>, address: &str, nonce: &PyBytes) -> PyResult<PyObject> {
     let nonce = nonce.as_bytes();
+    if nonce.len() != 4 {
+        return Err(ValueError::py_err("nonce is 4 bytes length"))
+    }
     let ver_identifier = match addr2ver_identifier(address) {
         Ok(ver_identifier) => ver_identifier,
         Err(err) => return Err(ValueError::py_err(err))

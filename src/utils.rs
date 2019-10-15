@@ -1,5 +1,9 @@
 use std::mem::transmute;
 use sha2::{Sha256, Digest};
+use std::convert::TryFrom;
+
+
+const MAX_POINTER_INT: u64 = usize::max_value() as u64;
 
 
 #[inline]
@@ -35,4 +39,11 @@ pub fn work_check(work: &[u8], target: &[u8]) -> bool {
         }
     }
     false
+}
+
+#[inline]
+pub fn python_hash(i: u64) -> isize {
+    // for __hash__
+    let h = (i % MAX_POINTER_INT) as i64 - (MAX_POINTER_INT / 2) as i64;
+    isize::try_from(h).unwrap()
 }
