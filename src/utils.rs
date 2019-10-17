@@ -1,6 +1,7 @@
 use std::mem::transmute;
 use sha2::{Sha256, Digest};
 use std::convert::TryFrom;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 
 const MAX_POINTER_INT: u64 = usize::max_value() as u64;
@@ -46,4 +47,12 @@ pub fn python_hash(i: u64) -> isize {
     // for __hash__
     let h = (i % MAX_POINTER_INT) as i64 - (MAX_POINTER_INT / 2) as i64;
     isize::try_from(h).unwrap()
+}
+
+#[inline]
+pub fn get_current_time() -> f64 {
+    let start = SystemTime::now();
+    let since_the_epoch = start.duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    since_the_epoch.as_micros() as f64 / 1_000_000.0
 }
