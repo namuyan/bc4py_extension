@@ -145,14 +145,9 @@ pub fn seek_thread(path: &str, start: usize, end: usize, previous_hash: &[u8], t
 pub fn seek_folder(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, worker: usize)
                    -> Result<(u32, Vec<u8>, String), String> {
     let now = Instant::now();
-
-    type ChannelType = Result<(u32, Vec<u8>, String), String>;
-    let pool: Pool<ThunkWorker<ChannelType>> = Pool::<ThunkWorker<ChannelType>>::new(1);
-    let (tx, rx): (Sender<ChannelType>, Receiver<ChannelType>) = channel();
     let re = Regex::new("^optimized\\.([a-z0-9]+)\\-([0-9]+)\\-([0-9]+)\\.dat$").unwrap();
-
-    let mut wait_count = 0;
     let paths = read_dir(dir).unwrap();
+
     for path in paths {
         let path = path.unwrap().path();
         let name = path.file_name().unwrap().to_str().unwrap();
@@ -162,28 +157,18 @@ pub fn seek_folder(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, wor
                 let address = c.get(1).unwrap().as_str().to_owned();
                 let start: usize = c.get(2).unwrap().as_str().parse().unwrap();
                 let end: usize = c.get(3).unwrap().as_str().parse().unwrap();
-                let previous_hash = previous_hash.to_vec();
-                let target = target.to_vec();
                 let path = path.as_path().to_str().unwrap().to_owned();
                 let now = now.clone();
-                pool.execute_to(tx.clone(), Thunk::of(move || {
-                    let previous_hash = previous_hash.as_slice();
-                    let target = target.as_slice();
-                    let (nonce, workhash) = seek_thread(
-                        &path, start, end, previous_hash, target, time, now, worker)?;
-                    Ok((nonce, workhash, address))
-                }));
-                wait_count += 1;
+                match seek_thread(&path, start, end, previous_hash, target, time, now, worker) {
+                    Ok((nonce, workhash)) => return Ok((nonce, workhash, address)),
+                    Err(err) => {
+                        if cfg!(debug_assertions) {
+                            eprintln!("debug: {}", err);
+                        }
+                    }
+                }
             },
             _ => ()
-        }
-    }
-
-    for result in rx.iter().take(wait_count) {
-        if result.is_ok() {
-            return result;
-        } else if cfg!(debug_assertions) {
-            eprintln!("debug: {}", result.err().unwrap());
         }
     }
     Err(format!("full seeked but not found enough work {}mSec", now.elapsed().as_millis()))
