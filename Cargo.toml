@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 blake2b_simd = "0.4.1"
 sha2 = "0.8.0"
 etcommon-bigint = "0.2.10"
-workerpool = "1.2.0"
+threadpool = "1.7.1"
 regex = "1"
 bech32 = "0.6"
 

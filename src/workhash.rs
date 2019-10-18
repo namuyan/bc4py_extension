@@ -3,17 +3,17 @@ use bc4py_plotter::pochash::{HASH_LOOP_COUNT,HASH_LENGTH};
 use blake2b_simd::blake2b;
 use blake2b_simd::Hash;
 use bigint::U256;
-use workerpool::Pool;
-use workerpool::thunk::{Thunk,ThunkWorker};
+use threadpool::ThreadPool;
 use regex::Regex;
 use std::path::Path;
 use std::io::{Seek, SeekFrom, BufReader, Read};
 use std::fs::{File, read_dir};
 use std::mem::transmute;
 use std::time::Instant;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender, Receiver};
 
-const SEEK_TIMEOUT: u64 = 5;
+const SEEK_TIMEOUT: u128 = 1500;  // mSec
 
 
 #[inline]
@@ -58,7 +58,7 @@ pub fn seek_file(path: &str, start: usize, end: usize, previous_hash: &[u8], tar
     for nonce in start..end {
         match fs.read(&mut scope_hash){
             Ok(32) => {
-                if nonce % 2000 == 0 && now.elapsed().as_secs() > SEEK_TIMEOUT {
+                if nonce % 2000 == 0 && now.elapsed().as_millis() > SEEK_TIMEOUT {
                     return Err(String::from(format!("timeout on {} nonce checking", nonce)));
                 }
                 let work = get_work_hash(time, &scope_hash, previous_hash);
@@ -93,8 +93,9 @@ pub fn seek_thread(path: &str, start: usize, end: usize, previous_hash: &[u8], t
 
     // pool objects
     type ChannelType = Result<(u32, Vec<u8>), String>;
-    let pool: Pool<ThunkWorker<ChannelType>> = Pool::<ThunkWorker<ChannelType>>::new(worker);
     let (tx, rx): (Sender<ChannelType>, Receiver<ChannelType>) = channel();
+    let signal = Arc::new(Mutex::new(0));
+    let pool = ThreadPool::new(worker);
 
     // throw tasks to seek
     let area_size = (end - start) / worker;
@@ -108,38 +109,51 @@ pub fn seek_thread(path: &str, start: usize, end: usize, previous_hash: &[u8], t
                 let now = now.clone();
                 let previous_hash = previous_hash.to_vec();
                 let target = target.to_vec();
-                pool.execute_to(tx.clone(), Thunk::of(move || {
+                let tx: Sender<ChannelType> = tx.clone();
+                let signal = signal.clone();
+                pool.execute(move || {
                     for (pos, nonce) in (area_start..area_end).enumerate() {
-                        if nonce % 2000 == 0 && now.elapsed().as_secs() > SEEK_TIMEOUT {
-                            return Err(format!("timeout on {} nonce checking", nonce));
+                        if nonce % 2000 == 0 && now.elapsed().as_millis() > SEEK_TIMEOUT {
+                            return tx.send(Err(format!("timeout on {} nonce checking", nonce))).unwrap();
+                        }
+                        if nonce % 2001 == 0 && *signal.lock().unwrap() != 0 {
+                            return tx.send(Err("killed by signal".to_owned())).unwrap();
                         }
                         if size < pos * 32 + 32 {
-                            return Err(format!("out of {}b/{}b buffer", size, buffer.len()));
+                            return tx.send(Err(format!("out of {}b/{}b buffer", size, buffer.len()))).unwrap();
                         }
                         let scope_hash = &buffer[(pos * 32)..(pos * 32 + 32)];
                         let work = get_work_hash(time, scope_hash, &previous_hash);
                         let work = work.as_bytes();
                         let work = &work[..32];
                         if work_check(&work, &target) {
-                            return Ok((nonce as u32, work.to_vec()));
+                            return tx.send(Ok((nonce as u32, work.to_vec()))).unwrap();
                         }
                     }
-                    return Err(format!("full seeked area {}-{} {}mSec", area_start, area_end, now.elapsed().as_millis()));
-                }));
+                    return tx.send(Err(format!("full seeked area {}-{} {}mSec",
+                                       area_start, area_end, now.elapsed().as_millis()))).unwrap();
+                });
                 wait_count += 1;
             },
             Err(err) => return Err(err.to_string())
         }
     }
 
+    let mut success: Option<ChannelType> = None;
     for result in rx.iter().take(wait_count) {
         if result.is_ok() {
-            return result;
+            *signal.lock().unwrap() += 1;
+            success = Some(result);
         } else if cfg!(debug_assertions) {
             eprintln!("debug: {}", result.err().unwrap());
         }
     }
-    Err(format!("full seeked but not found enough work {}mSec", now.elapsed().as_millis()))
+
+    // send result
+    match success {
+        Some(data) => data,
+        None => Err(format!("full seeked but not found enough work {}mSec", now.elapsed().as_millis()))
+    }
 }
 
 pub fn seek_folder(dir: &str, previous_hash: &[u8], target: &[u8], time:u32, worker: usize)
