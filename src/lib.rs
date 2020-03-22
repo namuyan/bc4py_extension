@@ -1,3 +1,5 @@
+#![feature(in_band_lifetimes)]
+
 #![feature(test)]
 extern crate test;
 

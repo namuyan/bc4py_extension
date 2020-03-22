@@ -31,7 +31,7 @@ impl PyObjectProtocol for PyAddress {
         Ok(python_hash(hasher.finish()))
     }
 
-    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+    fn __richcmp__(&self, other: PyRef<'p, Self>, op: CompareOp) -> PyResult<bool> {
         // only check version + identifier
         match op {
             CompareOp::Eq => Ok(self.bech.data() == other.bech.data()),  // `__eq__`
