@@ -1,4 +1,5 @@
 #![feature(in_band_lifetimes)]
+#![feature(drain_filter)]
 
 #![feature(test)]
 extern crate test;
@@ -9,7 +10,9 @@ extern crate regex;
 extern crate sha2;
 
 pub mod pyaddress;
+pub mod pyiter;
 pub mod pymodules;
+pub mod mempool;
 pub mod workhash;
 pub mod utils;
 

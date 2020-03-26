@@ -1,6 +1,7 @@
 use super::bc4py_plotter::pochash::{generator,HASH_LOOP_COUNT,HASH_LENGTH};
 use super::bc4py_plotter::utils::*;
 use crate::pyaddress::PyAddress;
+use crate::mempool::MemoryPool;
 use crate::workhash::*;
 use crate::utils::{bytes_to_u32, u32_to_bytes, sha256double};
 use blake2b_simd::blake2b;
@@ -253,5 +254,6 @@ fn bc4py_extension(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(bech2address))?;
     m.add_wrapped(wrap_pyfunction!(address2bech))?;
     m.add_class::<PyAddress>()?;
+    m.add_class::<MemoryPool>()?;
     Ok(())
 }
