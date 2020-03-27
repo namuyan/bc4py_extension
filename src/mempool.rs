@@ -111,81 +111,15 @@ impl MemoryPool {
         depends.sort_unstable();
         depends.dedup();
 
-        // most high position depend index
-        let mut depend_index: Option<usize> = None;
-        for (index, tx) in self.unconfirmed.iter().enumerate() {
-            if depends.contains(&tx.hash) {
-                depend_index = Some(index);
-            }
-            if hash == tx.hash {
-                return Err(AssertionError::py_err("already inserted tx"));
-            }
-        }
-
-        // most low position required index
-        let mut required_index = None;
-        for (index, tx) in self.unconfirmed.iter().enumerate().rev() {
-            if tx.depends.contains(&hash) {
-                required_index = Some(index);
-            }
-        }
-
-        // find best relative condition
-        let mut best_index: Option<usize> = None;
-        for (index, tx) in self.unconfirmed.iter().enumerate() {
-            // absolute conditions
-            // ex
-            //        0 1 2 3 4 5
-            // vec = [a,b,c,d,e,f]
-            //
-            // You can insert positions(2,3,4) when you depends on b(1) and required by e(4)
-            if depend_index.is_some() && index <= depend_index.unwrap() {
-                continue;
-            }
-            if required_index.is_some() && index > required_index.unwrap() {
-                continue;
-            }
-
-            // relative conditions
-            if price < tx.price {
-                continue;
-            } else if price == tx.price {
-                if time >= tx.time {
-                    continue;
-                }
-            }
-            // find
-            if best_index.is_none() {
-                best_index = Some(index);
-                break;
-            }
-        }
-
-        // minimum index is required_index
-        if best_index.is_none() {
-            best_index = required_index.clone();
-        }
-
         // generate tx object
-        let tx = {
+        let unconfirmed = {
             let gil = Python::acquire_gil();
             let obj = obj.to_object(gil.python());
             Unconfirmed {obj, hash, depends, price, time, deadline, size}
         };
 
-        // insert
-        match best_index {
-            Some(best_index) => {
-                // println!("best {} {:?} {:?}", best_index, depend_index, required_index);
-                self.unconfirmed.insert(best_index, tx);
-                Ok(best_index)
-            },
-            None => {
-                // println!("last {:?} {:?}", depend_index, required_index);
-                self.unconfirmed.push(tx);
-                Ok(self.unconfirmed.len())
-            },
-        }
+        // push
+        self.push_unconfirmed(unconfirmed)
     }
 
     /// remove(hash: bytes) -> None
@@ -201,23 +135,26 @@ impl MemoryPool {
     /// --
     ///
     /// simple remove unconfirmed txs
-    fn remove_many(&mut self, hashs: Vec<&PyBytes>) -> PyResult<()> {
+    fn remove_many(&mut self, hashs: Vec<&PyBytes>) {
         let hashs: Vec<U256> = hashs
             .iter().map(|hash| U256::from(hash.as_bytes())).collect();
         self.unconfirmed
             .drain_filter(|tx| hashs.contains(&tx.hash))
             .for_each(drop);
-        Ok(())
     }
 
-    /// remove_with_depends(hash: bytes) -> None
+    /// remove_with_depends(hash: bytes) -> int
     /// --
     ///
-    /// remove unconfirmed tx with depends
+    /// remove unconfirmed tx with depends and return delete count
     fn remove_with_depends(&mut self, hash: &PyBytes) -> PyResult<usize> {
         let hash = U256::from(hash.as_bytes());
-        self.remove_with_depend_myself(&hash)
-            .map_err(|_| AssertionError::py_err("not found hash"))
+        let mut deleted: Vec<Unconfirmed> = Vec::new();
+        self.remove_with_depend_myself(&hash, &mut deleted);
+        match deleted.len() {
+            0 => Err(AssertionError::py_err("not found hash")),
+            count => Ok(count),
+        }
     }
 
     /// list_size_limit(maxsize: int) -> Tuple[TX]
@@ -272,13 +209,13 @@ impl MemoryPool {
         assert_eq!(self.unconfirmed.len(), 0);
     }
 
-    /// clear_by_deadline(deadline: int) -> int
+    /// clear_by_deadline(deadline: int) -> Tuple[TX]
     /// --
     ///
     /// remove expired unconfirmed txs
-    fn clear_by_deadline(&mut self, deadline: u32) -> usize {
+    fn clear_by_deadline(&mut self, py: Python, deadline: u32) -> PyObject {
         // remove too old tx with depends
-        let mut count = 0;
+        let mut deleted: Vec<Unconfirmed> = Vec::new();
         loop {
             let mut want_delete = None;
             for tx in self.unconfirmed.iter() {
@@ -287,44 +224,148 @@ impl MemoryPool {
                     break;
                 }
             }
-            count += match want_delete {
-                Some(hash) => self.remove_with_depend_myself(&hash).unwrap_or(0),
+            match want_delete {
+                Some(hash) => self.remove_with_depend_myself(&hash, &mut deleted),
                 None => break,
             };
         }
-        count
+        // output expired txs
+        let elements: Vec<PyObject> = deleted
+            .into_iter().map(|tx| tx.obj).collect();
+        PyTuple::new(py, &elements).to_object(py)
     }
 }
 
 
+// row level methods only used inner
 impl MemoryPool {
     // use this method when tx is expired
-    fn remove_with_depend_myself(&mut self, hash: &U256) -> Result<usize, ()> {
+    fn remove_with_depend_myself(&mut self, hash: &U256, deleted: &mut Vec<Unconfirmed>) {
         // find position
         let delete_index = match self.unconfirmed.iter()
             .position(|tx| hash == &tx.hash) {
             Some(index) => index,
-            None => return Err(()),
+            None => return,
         };
 
         // delete tx
-        let mut delete_count = 1;
-        let delete_tx = self.unconfirmed.remove(delete_index);
+        deleted.push(self.unconfirmed.remove(delete_index));
 
         // check depends
         loop {
             let mut delete_hash = None;
             for tx in self.unconfirmed.iter() {
-                if tx.depends.contains(&delete_tx.hash) {
+                if tx.depends.contains(hash) {
                     delete_hash = Some(tx.hash.clone());
                     break;
                 }
             }
-            delete_count += match delete_hash {
-                Some(hash) => self.remove_with_depend_myself(&hash).unwrap_or(0),
+            match delete_hash {
+                Some(hash) => self.remove_with_depend_myself(&hash, deleted),
                 None => break,
-            };
+            }
         }
-        Ok(delete_count)
+    }
+
+    // push unconfirmed tx with dependency check
+    // return inserted tx's index
+    fn push_unconfirmed(&mut self, unconfirmed: Unconfirmed) -> PyResult<usize> {
+        // most high position depend index
+        let mut depend_index: Option<usize> = None;
+        for (index, tx) in self.unconfirmed.iter().enumerate() {
+            if unconfirmed.depends.contains(&tx.hash) {
+                depend_index = Some(index);
+            }
+            if unconfirmed.hash == tx.hash {
+                return Err(AssertionError::py_err("already inserted tx"));
+            }
+        }
+
+        // most low position required index
+        let mut required_index = None;
+        let mut disturbs = Vec::new();
+        for (index, tx) in self.unconfirmed.iter().enumerate().rev() {
+            if tx.depends.contains(&unconfirmed.hash) {
+                required_index = Some(index);
+                // check absolute condition: depend_index < required_index
+                if depend_index.is_some() && depend_index.unwrap() >= index {
+                    disturbs.push(tx.hash.clone());
+                }
+            }
+        }
+
+        // exception: with disturbs
+        if 0 < disturbs.len() {
+            // 1. remove disturbs
+            let mut deleted: Vec<Unconfirmed> = Vec::new();
+            for disturb in disturbs {
+                self.remove_with_depend_myself(&disturb, &mut deleted);
+            }
+
+            // 2. push original (not disturbed)
+            let hash = unconfirmed.hash.clone();
+            assert!(self.push_unconfirmed(unconfirmed).is_ok());
+
+            // 3. push deleted disturbs
+            for tx in deleted {
+                assert!(self.push_unconfirmed(tx).is_ok());
+            }
+
+            // 4. find original position
+            let position = self.unconfirmed.iter()
+                .position(|tx| hash == tx.hash);
+            return Ok(position.unwrap())
+        }
+
+        // normal: without disturbs
+        // find best relative condition
+        let mut best_index: Option<usize> = None;
+        for (index, tx) in self.unconfirmed.iter().enumerate() {
+            // absolute conditions
+            // ex
+            //        0 1 2 3 4 5
+            // vec = [a,b,c,d,e,f]
+            //
+            // You can insert positions(2,3,4) when you depends on b(1) and required by e(4)
+            if depend_index.is_some() && index <= depend_index.unwrap() {
+                continue;
+            }
+            if required_index.is_some() && index > required_index.unwrap() {
+                continue;
+            }
+
+            // relative conditions
+            if unconfirmed.price < tx.price {
+                continue;
+            } else if unconfirmed.price == tx.price {
+                if unconfirmed.time >= tx.time {
+                    continue;
+                }
+            }
+            // find
+            if best_index.is_none() {
+                best_index = Some(index);
+                break;
+            }
+        }
+
+        // minimum index is required_index (or None)
+        if best_index.is_none() {
+            best_index = required_index.clone();
+        }
+
+        // insert
+        match best_index {
+            Some(best_index) => {
+                // println!("best {} {:?} {:?}", best_index, depend_index, required_index);
+                self.unconfirmed.insert(best_index, unconfirmed);
+                Ok(best_index)
+            },
+            None => {
+                // println!("last {:?} {:?}", depend_index, required_index);
+                self.unconfirmed.push(unconfirmed);
+                Ok(self.unconfirmed.len())
+            },
+        }
     }
 }
