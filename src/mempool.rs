@@ -57,7 +57,7 @@ impl MemoryPool {
     }
 
 
-    /// get_obj(hash: int) -> TX
+    /// get_obj(hash: int) -> Optional[TX]
     /// --
     ///
     /// get TX object by hash
@@ -126,21 +126,43 @@ impl MemoryPool {
     /// --
     ///
     /// simple remove unconfirmed tx
-    fn remove(&mut self, hash: &PyBytes) {
+    fn remove(&mut self, hash: &PyBytes) -> PyResult<()> {
+        // require reorder after remove the hash
         let hash = U256::from(hash.as_bytes());
-        self.unconfirmed.drain_filter(|tx| hash == tx.hash).for_each(drop);
+        let mut deleted = Vec::with_capacity(1);
+        // remove all related txs
+        self.remove_with_depend_myself(&hash, &mut deleted);
+        if deleted.len() == 0 {
+            return Err(AssertionError::py_err("not found hash"));
+        }
+        // remove root tx
+        assert_eq!(hash, deleted.remove(0).hash);
+        // insert all
+        for tx in deleted {
+            assert!(self.push_unconfirmed(tx).is_ok())
+        }
+        Ok(())
     }
 
     /// remove_many(hashs: list) -> None
     /// --
     ///
-    /// simple remove unconfirmed txs
+    /// simple remove unconfirmed txs (no error even if no delete tx)
     fn remove_many(&mut self, hashs: Vec<&PyBytes>) {
+        //require reorder after remove the hash
         let hashs: Vec<U256> = hashs
             .iter().map(|hash| U256::from(hash.as_bytes())).collect();
-        self.unconfirmed
-            .drain_filter(|tx| hashs.contains(&tx.hash))
-            .for_each(drop);
+        let mut deleted = Vec::with_capacity(hashs.len());
+        // remove all related txs
+        for hash in hashs.iter() {
+            self.remove_with_depend_myself(hash, &mut deleted);
+        }
+        // remove root txs
+        deleted.drain_filter(|_tx| hashs.contains(&_tx.hash)).for_each(drop);
+        // insert all
+        for tx in deleted {
+            assert!(self.push_unconfirmed(tx).is_ok())
+        }
     }
 
     /// remove_with_depends(hash: bytes) -> int
@@ -239,7 +261,7 @@ impl MemoryPool {
 
 // row level methods only used inner
 impl MemoryPool {
-    // use this method when tx is expired
+    // remove unconfirmed tx with depend it
     fn remove_with_depend_myself(&mut self, hash: &U256, deleted: &mut Vec<Unconfirmed>) {
         // find position
         let delete_index = match self.unconfirmed.iter()
