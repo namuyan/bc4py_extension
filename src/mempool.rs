@@ -13,7 +13,7 @@ struct Unconfirmed {
     obj: PyObject,
     // for find priority
     hash: U256,
-    depends: Vec<U256>,
+    depends: Box<[U256]>,
     price: u32,
     time: u32,
     deadline: u32,
@@ -110,6 +110,8 @@ impl MemoryPool {
         // remove duplicate depends
         depends.sort_unstable();
         depends.dedup();
+        // drop any excess capacity
+        let depends = depends.into_boxed_slice();
 
         // generate tx object
         let unconfirmed = {
